@@ -1,7 +1,8 @@
 from OpenGL.GL import *
 
 def keyboard(key, x, y, dinosaur, scene, pause):
-    """Handle keyboard input"""
+    """Handle keyboard input - Note: This function is now deprecated in favor of 
+    the keyboardHandler in main.py, but kept for compatibility"""
     if key == b' ':  # Spacebar for jump
         dinosaur.jump_press()
     if key == b"d":  # 'd' for day-night toggle

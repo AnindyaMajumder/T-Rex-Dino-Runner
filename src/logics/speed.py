@@ -10,7 +10,7 @@ class GameSpeed:
         self.last_update_time = self.start_time
         self.elapsed_time = 0
         self.score = 0
-        self.score_multiplier = 0.1  # Score increment per frame
+        self.score_multiplier = 0.05  # Score increment per frame
         
     def update(self, delta_time):
         """Update game speed based on elapsed time"""
