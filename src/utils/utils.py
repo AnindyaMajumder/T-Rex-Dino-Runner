@@ -49,8 +49,9 @@ def outdoorScene(is_day, stars):
         glColor3f(1.0, 0.843, 0.0)  # Yellow for the sun
     else:
         glColor3f(1.0, 1.0, 1.0)  # White for the moon
-    Circle.circles(40, 700, 400)
-
+    for i in range(1,40):
+        Circle.circles(i,100,450)
+        
     # Clouds (daytime only)
     if is_day:
         glColor3f(1.0, 1.0, 1.0)  # White for clouds
@@ -70,12 +71,16 @@ def outdoorScene(is_day, stars):
 
 def keyboard(key, x, y, dinosaur, is_day, pause):
     if key == b' ':
-        dinosaur.jump()
+        dinosaur.jump_press()
     if key == b"d":
         is_day = not is_day
     if key == b"\x1b":
         pause = not pause
     return is_day, pause
+
+def keyboardUp(key, x, y, dinosaur):
+    if key == b' ':
+        dinosaur.jump_release()
 
 def iterate(is_day):
     glViewport(0, 0, 800, 500)
