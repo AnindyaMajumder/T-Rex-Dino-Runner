@@ -1,120 +1,74 @@
 from OpenGL.GL import *
 from .circle import Circle
 from .line import Line
-import time
+from logics.jump import JumpPhysics
 import math
+import time
 
 class Dinosaur:
     def __init__(self):
-        self.base_x = 150  # Base x position
-        self.x = self.base_x  # Current x position
-        self.y = 130  # Lower starting position to match ground
-        self.base_y = 130  # Store the ground level
-        self.jump_height = 210  # Significantly increased jump height
-        self.max_jump_height = 280  # Even higher maximum jump height
-        self.jump_time = 0
-        self.jumping = False
-        self.max_jump_time = 100  # Longer jump duration for higher arc
+        self.x = 150  # Base x position
+        self.y = 130  # Base y position
         self.size = 0.7  # Scaling factor to make dino smaller
+        self.visual_offset_x = 0  # Horizontal offset for animation
+        self.jump_physics = JumpPhysics()  # Jump physics handler
+        self.last_update_time = time.time()
+        self.run_animation_time = 0
+        self.run_animation_period = 0.3  # Period of running animation in seconds
         
-        # For variable jump height
-        self.jump_start_time = 0
-        self.jump_key_held = False
-        self.key_hold_duration = 0
-        self.target_height = self.jump_height
-        
-        # Horizontal jump parameters
-        self.forward_distance = 90  # Significantly increased forward movement
-        self.max_forward_distance = 150  # Much larger horizontal movement for projectile
-
     def jump_press(self):
-        """Called when jump key is initially pressed"""
-        if not self.jumping:
-            self.jumping = True
-            self.jump_time = 0
-            self.jump_key_held = True
-            self.jump_start_time = time.time()
-            # Reset position to base
-            self.x = self.base_x
-            # Start with standard height, will be adjusted if key is held
-            self.target_height = self.jump_height
-            self.target_distance = self.forward_distance
-
+        """Handle jump button press"""
+        return self.jump_physics.jump_press()
+    
     def jump_release(self):
-        """Called when jump key is released"""
-        if self.jump_key_held:
-            self.jump_key_held = False
-            # Calculate how long the key was held
-            hold_duration = time.time() - self.jump_start_time
+        """Handle jump button release"""
+        self.jump_physics.jump_release()
+    
+    def update(self, game_speed):
+        """Update dinosaur state based on current game conditions"""
+        current_time = time.time()
+        delta_time = current_time - self.last_update_time
+        self.last_update_time = current_time
+        
+        # Update jump physics
+        new_y, jump_progress, is_jumping = self.jump_physics.update(delta_time)
+        self.y = new_y
+        self.is_jumping = is_jumping
+        
+        # Update running animation (bobbing motion when not jumping)
+        if not is_jumping:
+            self.run_animation_time += delta_time
+            if self.run_animation_time > self.run_animation_period:
+                self.run_animation_time -= self.run_animation_period
             
-            # Adjust jump height based on hold duration (0.1-0.5 seconds)
-            if hold_duration < 0.1:
-                # Short press = lower jump
-                self.target_height = self.jump_height * 0.7
-                self.target_distance = self.forward_distance * 0.6
-            elif hold_duration > 0.5:
-                # Long press = higher jump
-                self.target_height = min(self.max_jump_height, self.jump_height * 1.3)
-                self.target_distance = min(self.max_forward_distance, self.forward_distance * 1.5)
-            else:
-                # Medium press = standard jump
-                self.target_height = self.jump_height
-                self.target_distance = self.forward_distance
-
-    def update(self):
-        if self.jumping:
-            self.jump_time += 1
-            
-            # If key is still held after 0.5s, use maximum height
-            if self.jump_key_held and (time.time() - self.jump_start_time) > 0.5:
-                self.target_height = self.max_jump_height
-                self.target_distance = self.max_forward_distance
-            
-            # Calculate jump progress as a fraction (0 to 1)
-            progress = self.jump_time / self.max_jump_time
-            
-            # Parabolic jump trajectory with variable height
-            if self.jump_time <= self.max_jump_time / 2:
-                # Upward acceleration phase with slower rise
-                fraction = self.jump_time / (self.max_jump_time / 2)
-                self.y = self.base_y + self.target_height * (fraction * (2 - fraction))
-            else:
-                # Downward acceleration phase with slower fall
-                fraction = (self.jump_time - self.max_jump_time / 2) / (self.max_jump_time / 2)
-                self.y = self.base_y + self.target_height * ((1 - fraction) * (2 - (1 - fraction)))
-            
-            # More hang time at the peak of the jump
-            if self.jump_time > (self.max_jump_time / 2 - 8) and self.jump_time < (self.max_jump_time / 2 + 8):
-                self.y = self.base_y + self.target_height  # Hold at max height
-            
-            # Horizontal movement - move forward during the first half, then back
-            # This creates an arc-like path for more horizontal coverage
-            if progress <= 0.5:
-                # Moving forward during rise
-                self.x = self.base_x + self.target_distance * (progress * 2)
-            else:
-                # Moving back during fall
-                self.x = self.base_x + self.target_distance * (2 - progress * 2)
-            
-            # End jump cycle
-            if self.jump_time >= self.max_jump_time:
-                self.y = self.base_y
-                self.x = self.base_x  # Reset to original x position
-                self.jumping = False
-                
+            # Create a slight up/down motion when running
+            bob_amount = 3.0  # Pixels to bob up/down
+            run_progress = self.run_animation_time / self.run_animation_period
+            bob_offset = bob_amount * math.sin(run_progress * 2 * math.pi)
+            self.visual_offset_x = math.sin(run_progress * 4 * math.pi) * 2.0
+        else:
+            # Use jump progress for animation
+            self.jump_progress = jump_progress
+    
+    def set_position(self, x, y):
+        """Set the dinosaur position"""
+        self.x = x
+        self.y = y
+    
     def draw(self):
+        """Draw the dinosaur at the current position with proper animation state"""
         # Apply scaling by adjusting coordinates relative to center
         s = self.size  # scaling factor
-        cx, cy = self.x, self.y  # center point
+        cx, cy = self.x + self.visual_offset_x, self.y  # center point
         
-        # T-Rex body shape (improved)
+        # T-Rex body shape
         glColor3f(0.2, 0.7, 0.3)  # Green dinosaur color
         
         # Head
         for i in range(1, int(18 * s)):
             Circle.circles(i, cx, cy + int(10 * s))
         
-        # Body (more compact)
+        # Body
         glBegin(GL_POLYGON)
         glVertex2f(cx - int(15 * s), cy + int(15 * s))  # Top neck
         glVertex2f(cx - int(40 * s), cy)                # Mid back
@@ -123,42 +77,12 @@ class Dinosaur:
         glVertex2f(cx + int(15 * s), cy)                # Mid front
         glEnd()
         
-        # Front leg animation based on jump state
+        # Legs and feet based on jumping state
         glLineWidth(2.0)
-        if self.jumping:
-            # Legs tucked up during jump
-            leg_angle = 45 * math.sin(self.jump_time * 0.2)
-            
-            # Front leg tucked
-            leg_x = cx + int(5 * s)
-            leg_y = cy - int(15 * s)
-            leg_length = int(15 * s)
-            
-            # Calculate the leg end position with angle
-            end_x = leg_x + leg_length * math.cos(math.radians(leg_angle))
-            end_y = leg_y - leg_length * math.sin(math.radians(leg_angle))
-            
-            Line.plot(leg_x, leg_y, int(end_x), int(end_y))
-            Line.plot(int(end_x), int(end_y), int(end_x + 10 * s), int(end_y))
-            
-            # Back leg tucked
-            back_leg_x = cx - int(20 * s)
-            back_leg_y = cy - int(15 * s)
-            back_leg_angle = -leg_angle
-            
-            back_end_x = back_leg_x + leg_length * math.cos(math.radians(back_leg_angle))
-            back_end_y = back_leg_y - leg_length * math.sin(math.radians(back_leg_angle))
-            
-            Line.plot(back_leg_x, back_leg_y, int(back_end_x), int(back_end_y))
-            Line.plot(int(back_end_x), int(back_end_y), int(back_end_x + 10 * s), int(back_end_y))
+        if self.jump_physics.is_currently_jumping():
+            self._draw_jumping_legs(cx, cy, s)
         else:
-            # Normal standing legs
-            Line.plot(cx + int(5 * s), cy - int(15 * s), cx + int(5 * s), cy - int(30 * s))  # Upper leg
-            Line.plot(cx + int(5 * s), cy - int(30 * s), cx + int(15 * s), cy - int(30 * s))  # Foot
-            
-            # Back leg
-            Line.plot(cx - int(20 * s), cy - int(15 * s), cx - int(20 * s), cy - int(30 * s))  # Upper leg
-            Line.plot(cx - int(20 * s), cy - int(30 * s), cx - int(10 * s), cy - int(30 * s))  # Foot
+            self._draw_running_legs(cx, cy, s)
         
         # Arm (small T-Rex arm)
         Line.plot(cx, cy, cx + int(10 * s), cy + int(5 * s))
@@ -174,3 +98,73 @@ class Dinosaur:
         Line.plot(cx + int(18 * s), cy + int(5 * s), cx + int(8 * s), cy + int(5 * s))
         
         glLineWidth(1.0)
+    
+    def _draw_jumping_legs(self, cx, cy, s):
+        """Draw legs for jumping animation state"""
+        jump_progress = self.jump_physics.jump_progress
+        
+        # Dynamic leg animation based on jump phase
+        if jump_progress < 0.2:
+            # Takeoff phase - legs extending backward
+            leg_angle = 60 * jump_progress / 0.2  # 0 to 60 degrees
+        elif jump_progress > 0.8:
+            # Landing phase - legs extending forward
+            landing_progress = (jump_progress - 0.8) / 0.2  # 0 to 1 in landing phase
+            leg_angle = 60 - 120 * landing_progress  # 60 to -60 degrees
+        else:
+            # Mid-flight - maintain tucked position
+            mid_flight_progress = (jump_progress - 0.2) / 0.6  # 0 to 1 in mid-flight
+            # Add subtle oscillation during flight
+            leg_angle = 60 - 10 * math.sin(mid_flight_progress * math.pi * 2)
+        
+        # Front leg with dynamic angle
+        leg_x = cx + int(5 * s)
+        leg_y = cy - int(15 * s)
+        leg_length = int(15 * s)
+        
+        # Calculate leg positions with the angle
+        end_x = leg_x + leg_length * math.cos(math.radians(leg_angle))
+        end_y = leg_y - leg_length * math.sin(math.radians(leg_angle))
+        
+        Line.plot(leg_x, leg_y, int(end_x), int(end_y))
+        Line.plot(int(end_x), int(end_y), int(end_x + 10 * s), int(end_y))
+        
+        # Back leg with opposite angle for balance
+        back_leg_x = cx - int(20 * s)
+        back_leg_y = cy - int(15 * s)
+        back_leg_angle = -leg_angle  # Mirror the front leg
+        
+        back_end_x = back_leg_x + leg_length * math.cos(math.radians(back_leg_angle))
+        back_end_y = back_leg_y - leg_length * math.sin(math.radians(back_leg_angle))
+        
+        Line.plot(back_leg_x, back_leg_y, int(back_end_x), int(back_end_y))
+        Line.plot(int(back_end_x), int(back_end_y), int(back_end_x + 10 * s), int(back_end_y))
+    
+    def _draw_running_legs(self, cx, cy, s):
+        """Draw legs for running animation"""
+        # Use run_animation_time to create alternating leg movements
+        run_progress = self.run_animation_time / self.run_animation_period
+        leg_angle_front = 30 * math.sin(run_progress * 2 * math.pi)  # -30 to 30 degrees
+        leg_angle_back = -leg_angle_front  # Opposite movement
+        
+        # Front leg with dynamic angle
+        leg_x = cx + int(5 * s)
+        leg_y = cy - int(15 * s)
+        leg_length = int(15 * s)
+        
+        # Calculate leg positions with the angle
+        end_x = leg_x + leg_length * math.cos(math.radians(leg_angle_front))
+        end_y = leg_y - leg_length * math.sin(math.radians(leg_angle_front))
+        
+        Line.plot(leg_x, leg_y, int(end_x), int(end_y))
+        Line.plot(int(end_x), int(end_y), int(end_x + 10 * s), int(end_y))
+        
+        # Back leg with opposite angle for balance
+        back_leg_x = cx - int(20 * s)
+        back_leg_y = cy - int(15 * s)
+        
+        back_end_x = back_leg_x + leg_length * math.cos(math.radians(leg_angle_back))
+        back_end_y = back_leg_y - leg_length * math.sin(math.radians(leg_angle_back))
+        
+        Line.plot(back_leg_x, back_leg_y, int(back_end_x), int(back_end_y))
+        Line.plot(int(back_end_x), int(back_end_y), int(back_end_x + 10 * s), int(back_end_y))
